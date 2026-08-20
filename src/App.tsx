@@ -11,6 +11,7 @@ import { ResultModal } from './components/ResultModal';
 import { SettingsModal } from './components/SettingsModal';
 import { DailyRewardModal } from './components/DailyRewardModal';
 import { LeaderboardModal } from './components/LeaderboardModal';
+import { FullMapModal } from './components/FullMapModal';
 import {
   CameraView,
   ControlInputs,
@@ -25,7 +26,7 @@ import { StorageService } from './services/storage';
 import { sound } from './services/audio';
 
 type GameScreen = 'HOME' | 'PLAYING' | 'GARAGE';
-type ActiveModal = 'NONE' | 'MISSIONS' | 'SETTINGS' | 'LEADERBOARD' | 'DAILY_REWARD' | 'PAUSE' | 'RESULT';
+type ActiveModal = 'NONE' | 'MISSIONS' | 'SETTINGS' | 'LEADERBOARD' | 'DAILY_REWARD' | 'PAUSE' | 'RESULT' | 'FULL_MAP';
 
 export function App() {
   const [profile, setProfile] = useState<UserProfile>(() => StorageService.loadProfile());
@@ -179,6 +180,19 @@ export function App() {
         onMissionFail: handleMissionFail,
         onViolation: handleViolation,
         onParkingUpdate: handleParkingUpdate,
+        onDestinationReached: (destName, rewardCoins, rewardXp) => {
+          StorageService.addCoins(rewardCoins);
+          StorageService.addXp(rewardXp);
+          setProfile(StorageService.loadProfile());
+          handleViolation({
+            id: `dest_reached_${Date.now()}`,
+            type: 'BONUS_CLEAN',
+            message: `🏁 Reached ${destName}! +${rewardCoins} Coins +${rewardXp} XP`,
+            pointsDelta: 300,
+            coinsDelta: rewardCoins,
+            isBonus: true,
+          });
+        },
       },
       activeMission || undefined,
       activeMission ? 'MISSION' : 'FREE_DRIVE'
@@ -361,6 +375,7 @@ export function App() {
               setModal('PAUSE');
             }}
             onCycleCamera={cycleCamera}
+            onOpenFullMap={() => setModal('FULL_MAP')}
             violations={violations}
           />
 
@@ -465,6 +480,20 @@ export function App() {
           onClose={() => setModal('NONE')}
         />
       )}
+
+      {/* 4. FULLSCREEN CITY MAP & NAVIGATION MODAL */}
+      <FullMapModal
+        isOpen={modal === 'FULL_MAP'}
+        onClose={() => setModal('NONE')}
+        playerMapPos={telemetry.playerMapPos}
+        navigationRoute={telemetry.navigationRoute}
+        onSetDestination={target => {
+          engineRef.current?.setGpsDestination(target);
+        }}
+        onClearDestination={() => {
+          engineRef.current?.clearGpsDestination();
+        }}
+      />
     </div>
   );
 }

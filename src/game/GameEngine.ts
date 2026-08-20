@@ -1,11 +1,13 @@
 import * as THREE from 'three';
-import { CameraView, GameSubMode, InGameTelemetry, MissionDefinition, ParkingState, TrafficViolation, UserProfile } from '../types/game';
+import { CameraView, GameSubMode, InGameTelemetry, MapLocationCategory, MissionDefinition, NavigationRoute, ParkingState, PlayerMapPosition, TrafficViolation, UserProfile } from '../types/game';
 import { INITIAL_CARS } from './constants';
 import { CarController, ControlInputs } from './CarController';
 import { CityWorld } from './CityWorld';
 import { TrafficSystem } from './TrafficSystem';
 import { RuleSystem } from './RuleSystem';
 import { ParkingSystem } from './ParkingSystem';
+import { MapNavigationSystem } from './MapNavigationSystem';
+import { METROPOLIS_POIS } from './mapData';
 import { sound } from '../services/audio';
 
 export interface GameEngineCallbacks {
@@ -23,6 +25,7 @@ export interface GameEngineCallbacks {
   onCoinCollected?: (totalInSession: number) => void;
   onViolation?: (violation: TrafficViolation) => void;
   onParkingUpdate?: (state: ParkingState) => void;
+  onDestinationReached?: (destName: string, rewardCoins: number, rewardXp: number) => void;
 }
 
 export class GameEngine {
@@ -39,6 +42,7 @@ export class GameEngine {
   public traffic: TrafficSystem;
   public rules: RuleSystem;
   public parking: ParkingSystem;
+  public navigation: MapNavigationSystem;
   public playerCar: CarController | null = null;
 
   // Game State
@@ -161,16 +165,21 @@ export class GameEngine {
 
     this.parking = new ParkingSystem(this.world);
 
-    // 6. Particles
+    // 6. Navigation System
+    this.navigation = new MapNavigationSystem((destination, totalDistM) => {
+      this.handleDestinationArrival(destination, totalDistM);
+    });
+
+    // 7. Particles
     this.scene.add(this.particleGroup);
 
-    // 7. Spawn Player Vehicle
+    // 8. Spawn Player Vehicle
     this.spawnPlayerCar();
 
-    // 8. Setup Mission Waypoints / Objectives
+    // 9. Setup Mission Waypoints / Objectives
     this.setupMissionObjectives();
 
-    // 9. Window, Container and Input Listeners
+    // 10. Window, Container and Input Listeners
     window.addEventListener('resize', this.onResize);
     window.addEventListener('keydown', this.onKeyDown);
     window.addEventListener('keyup', this.onKeyUp);
@@ -228,9 +237,14 @@ export class GameEngine {
     this.isGameOver = false;
 
     if (!this.currentMission) {
-      // Free Drive - initial open city explorer beacon
-      this.missionWaypoints = [new THREE.Vector3(54, 0, 54)];
-      this.world.createWaypointBeacon(this.missionWaypoints[0]);
+      // Free Drive - set initial GPS suggestion to Central Tower
+      const playerPos = this.playerCar ? { x: this.playerCar.position.x, z: this.playerCar.position.z } : { x: 4.5, z: -45 };
+      this.navigation.calculateRoute(
+        playerPos,
+        { x: 0, z: 0 },
+        { id: 'poi-central-tower', name: 'Central Tower Plaza', category: 'LANDMARK' }
+      );
+      this.world.updateDestinationMarker({ x: 0, z: 0 }, 'Central Tower Plaza');
       return;
     }
 
@@ -240,6 +254,12 @@ export class GameEngine {
       const slot = this.world.parkingSlots.find(s => s.id === targetSlot);
       if (slot) {
         this.world.createWaypointBeacon(slot.position);
+        const playerPos = this.playerCar ? { x: this.playerCar.position.x, z: this.playerCar.position.z } : { x: 4.5, z: -45 };
+        this.navigation.calculateRoute(
+          playerPos,
+          { x: slot.position.x, z: slot.position.z },
+          { name: `Parking Bay (${targetSlot})`, category: 'PARKING' }
+        );
       }
     } else {
       // Waypoint checkpoints
@@ -254,6 +274,12 @@ export class GameEngine {
       this.missionWaypoints = waypoints.slice(0, count);
       if (this.missionWaypoints.length > 0) {
         this.world.createWaypointBeacon(this.missionWaypoints[0]);
+        const playerPos = this.playerCar ? { x: this.playerCar.position.x, z: this.playerCar.position.z } : { x: 4.5, z: -45 };
+        this.navigation.calculateRoute(
+          playerPos,
+          { x: this.missionWaypoints[0].x, z: this.missionWaypoints[0].z },
+          { name: this.currentMission.title, category: 'MISSION' }
+        );
       }
     }
   }
@@ -657,11 +683,33 @@ export class GameEngine {
       }
     }
 
-    // 11. Camera Smoothing & Follow Logic
+    // 11. GPS Navigation Subsystem Update
+    const activeRoute = this.navigation.update(
+      { x: carPos.x, z: carPos.z },
+      Math.abs(carSpeedKmh),
+      this.playerCar.yaw
+    );
+
+    // Sync 3D in-world navigation ribbon and beacon
+    if (activeRoute && !activeRoute.isDestinationReached) {
+      this.world.updateNavigationPath(activeRoute.waypoints, true);
+      this.world.updateDestinationMarker(activeRoute.destination.position, activeRoute.destination.name);
+    } else if (activeRoute?.isDestinationReached) {
+      this.world.updateNavigationPath([], false);
+    }
+
+    // 12. Camera Smoothing & Follow Logic
     this.updateCamera(delta, speedMs);
 
-    // 12. Send Telemetry to React HUD
+    // 13. Send Telemetry to React HUD
     const timeRemaining = this.currentMission?.timeLimit ? Math.max(0, this.currentMission.timeLimit - this.missionElapsedTime) : undefined;
+    const playerMapPos: PlayerMapPosition = {
+      x: carPos.x,
+      z: carPos.z,
+      heading: this.playerCar.yaw,
+      speedKmh: Math.abs(carSpeedKmh),
+    };
+
     this.callbacks.onTelemetryUpdate({
       speedKmh: Math.abs(carSpeedKmh),
       rpm: rpmNorm,
@@ -675,13 +723,15 @@ export class GameEngine {
       leftSignalOn: this.playerCar.leftSignalOn,
       rightSignalOn: this.playerCar.rightSignalOn,
       hazardLightsOn: this.playerCar.hazardLightsOn,
-      distanceToObjective: Math.round(distToObjective),
+      distanceToObjective: Math.round(activeRoute ? activeRoute.remainingDistanceMeters : distToObjective),
       currentScore: this.currentScore,
       coinsCollectedInSession: this.sessionCoinsCollected,
       timeRemaining,
       elapsedTime: this.missionElapsedTime,
       isPaused: this.isPaused,
       isGameOver: this.isGameOver,
+      navigationRoute: activeRoute,
+      playerMapPos,
     });
   }
 
@@ -842,6 +892,40 @@ export class GameEngine {
     sound.stopEngine();
     sound.playFailure();
     this.callbacks.onMissionFail(reason, this.currentScore);
+  }
+
+  public setGpsDestination(target: { id?: string; name: string; category?: MapLocationCategory; position: { x: number; z: number } }) {
+    if (!this.playerCar) return;
+    const playerPos = { x: this.playerCar.position.x, z: this.playerCar.position.z };
+    const route = this.navigation.calculateRoute(playerPos, target.position, {
+      id: target.id,
+      name: target.name,
+      category: target.category || 'LANDMARK',
+    });
+
+    if (route) {
+      this.world.updateNavigationPath(route.waypoints, true);
+      this.world.updateDestinationMarker(target.position, target.name);
+      sound.playCoin();
+    }
+    return route;
+  }
+
+  public clearGpsDestination() {
+    this.navigation.clearRoute();
+    this.world.updateNavigationPath([], false);
+    this.world.updateDestinationMarker(null, '');
+  }
+
+  private handleDestinationArrival(destination: { name: string; category?: string; position: { x: number; z: number } }, totalDistM: number) {
+    sound.playSuccess();
+    const rewardCoins = Math.max(50, Math.round(totalDistM * 0.4));
+    const rewardXp = Math.max(75, Math.round(totalDistM * 0.6));
+
+    this.currentScore += 300;
+    this.sessionCoinsCollected += rewardCoins;
+    this.callbacks.onCoinCollected?.(this.sessionCoinsCollected);
+    this.callbacks.onDestinationReached?.(destination.name, rewardCoins, rewardXp);
   }
 
   public destroy() {

@@ -1,6 +1,6 @@
 {
   "name": "City Drive – Car Driving Game",
-  "description": "A feature-packed 3D browser-based car driving game featuring realistic driving physics, bustling traffic, day/night cycles, diverse missions, precision parking challenges, garage customization, and comprehensive vehicle upgrades.",
+  "description": "A feature-packed 3D browser-based car driving game featuring realistic vehicle physics, the sprawling City Drive Metropolis open-world map with A* GPS navigation and dynamic ribbons, bustling AI traffic, day/night cycles, diverse career missions, precision parking challenges, garage showroom customization, and local persistence.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

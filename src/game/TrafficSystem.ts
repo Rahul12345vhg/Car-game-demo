@@ -40,14 +40,22 @@ export class TrafficSystem {
     ];
 
     const colors = [
-      0xdc2626, 0x2563eb, 0x16a34a, 0xd97706, 0x7c3aed,
-      0x475569, 0xf8fafc, 0x0f172a, 0x059669, 0xdb2777
+      0x1677ff, // Electric Blue
+      0xef4444, // Crimson Red
+      0x22c55e, // Emerald Green
+      0xffd43b, // Solar Yellow
+      0x7c3aed, // Royal Purple
+      0xff8a00, // Blaze Orange
+      0xffffff, // Pure White
+      0x00cfff, // Cyber Cyan
+      0xec4899, // Hot Pink
+      0x38bdf8, // Sky Blue
     ];
 
     this.carMaterials = colors.map(c => new THREE.MeshStandardMaterial({
       color: c,
-      roughness: 0.3,
-      metalness: 0.6,
+      roughness: 0.25,
+      metalness: 0.65,
     }));
   }
 

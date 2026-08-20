@@ -82,6 +82,14 @@ export interface ParkingState {
   completed: boolean;
 }
 
+export type ColorTheme =
+  | 'OCEAN'
+  | 'SUNSET'
+  | 'NEON'
+  | 'TROPICAL'
+  | 'PURPLE_NIGHT'
+  | 'CLASSIC';
+
 export interface GameSettings {
   soundEnabled: boolean;
   musicEnabled: boolean;
@@ -91,6 +99,7 @@ export interface GameSettings {
   touchControlLayout: 'BUTTONS' | 'WHEEL';
   steeringSensitivity: number; // 0.5 to 1.5
   metricUnits: boolean; // km/h vs mph
+  colorTheme?: ColorTheme;
 }
 
 export interface ControlInputs {
@@ -134,6 +143,83 @@ export interface UserProfile {
   settings: GameSettings;
 }
 
+export type MapLocationCategory =
+  | 'HOME'
+  | 'GARAGE'
+  | 'GAS'
+  | 'GAS_STATION'
+  | 'PARKING'
+  | 'MISSION'
+  | 'CHALLENGE'
+  | 'HOSPITAL'
+  | 'POLICE'
+  | 'AIRPORT'
+  | 'SHOPPING'
+  | 'PARK'
+  | 'DEALERSHIP'
+  | 'LANDMARK'
+  | 'SERVICES';
+
+export interface MapPointOfInterest {
+  id: string;
+  name: string;
+  category: MapLocationCategory;
+  description: string;
+  position: { x: number; z: number; y?: number };
+  icon: string;
+  district: string;
+  missionId?: number;
+  rewardCoins?: number;
+  rewardXp?: number;
+  isUnlocked?: boolean;
+}
+
+export type RoadNodeType = 'INTERSECTION' | 'HIGHWAY_JUNCTION' | 'ROUNDABOUT' | 'DEAD_END' | 'WAYPOINT';
+export type RoadType = 'HIGHWAY' | 'MAIN_ROAD' | 'CITY_ROAD' | 'SIDE_ROAD';
+
+export interface RoadNode {
+  id: string;
+  x: number;
+  z: number;
+  name?: string;
+  type: RoadNodeType;
+  neighbors: string[];
+}
+
+export interface RoadSegment {
+  id: string;
+  fromNode: string;
+  toNode: string;
+  type: RoadType;
+  length: number;
+  speedLimit: number;
+  lanes: number;
+}
+
+export interface NavigationRoute {
+  destination: {
+    id?: string;
+    name: string;
+    category?: MapLocationCategory;
+    position: { x: number; z: number };
+  };
+  nodes: RoadNode[];
+  waypoints: { x: number; z: number }[];
+  totalDistanceMeters: number;
+  remainingDistanceMeters: number;
+  estimatedTimeSeconds: number;
+  currentInstruction: string;
+  nextInstruction?: string;
+  isDestinationReached: boolean;
+}
+
+export interface PlayerMapPosition {
+  x: number;
+  z: number;
+  heading: number; // yaw in radians
+  speedKmh: number;
+}
+
 export interface InGameTelemetry {
   speedKmh: number;
   rpm: number;
@@ -156,6 +242,8 @@ export interface InGameTelemetry {
   isGameOver: boolean;
   gameResult?: 'WIN' | 'LOSE';
   failReason?: string;
+  navigationRoute?: NavigationRoute | null;
+  playerMapPos?: PlayerMapPosition;
 }
 
 export interface LeaderboardEntry {

@@ -34,6 +34,8 @@ export class CityWorld {
   public trafficSignals: TrafficSignal[] = [];
   public parkingSlots: ParkingSlot[] = [];
   public waypointMesh: THREE.Group | null = null;
+  public navPathGroup: THREE.Group = new THREE.Group();
+  public destinationBeacon: THREE.Group | null = null;
   public coinPickups: { mesh: THREE.Mesh; id: string; collected: boolean }[] = [];
 
   // Lighting references
@@ -49,6 +51,7 @@ export class CityWorld {
 
   constructor(scene: THREE.Scene, quality: GraphicsQuality = 'HIGH', timeOfDay: TimeOfDay = 'DAY') {
     this.scene = scene;
+    this.scene.add(this.navPathGroup);
 
     // Base Atmospheric & Ambient Lighting
     this.ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
@@ -61,8 +64,8 @@ export class CityWorld {
       this.sunLight.shadow.mapSize.width = quality === 'HIGH' ? 2048 : 1024;
       this.sunLight.shadow.mapSize.height = quality === 'HIGH' ? 2048 : 1024;
       this.sunLight.shadow.camera.near = 10;
-      this.sunLight.shadow.camera.far = 400;
-      const d = 160;
+      this.sunLight.shadow.camera.far = 450;
+      const d = 180;
       this.sunLight.shadow.camera.left = -d;
       this.sunLight.shadow.camera.right = d;
       this.sunLight.shadow.camera.top = d;
@@ -78,31 +81,32 @@ export class CityWorld {
   public setTimeOfDay(time: TimeOfDay) {
     if (time === 'DAY') {
       this.scene.background = new THREE.Color(0x38bdf8);
-      this.scene.fog = new THREE.FogExp2(0x60a5fa, 0.0018);
+      this.scene.fog = new THREE.FogExp2(0x60a5fa, 0.0012);
       this.sunLight.color.setHex(0xfffbeb);
-      this.sunLight.intensity = 1.6;
+      this.sunLight.intensity = 1.8;
       this.sunLight.position.set(120, 180, 100);
-      this.ambientLight.color.setHex(0xf8fafc);
-      this.ambientLight.intensity = 0.9;
+      this.ambientLight.color.setHex(0xf0fdf4);
+      this.ambientLight.intensity = 1.0;
       this.streetLights.forEach(l => (l.visible = false));
     } else if (time === 'DUSK') {
-      this.scene.background = new THREE.Color(0xc2410c);
-      this.scene.fog = new THREE.FogExp2(0x7c2d12, 0.0022);
-      this.sunLight.color.setHex(0xfb923c);
-      this.sunLight.intensity = 1.2;
+      // SUNSET: Orange, Pink, Purple sky with warm sunlight
+      this.scene.background = new THREE.Color(0xff8a00);
+      this.scene.fog = new THREE.FogExp2(0x7c3aed, 0.0016);
+      this.sunLight.color.setHex(0xff8a00);
+      this.sunLight.intensity = 1.5;
       this.sunLight.position.set(180, 45, 60);
-      this.ambientLight.color.setHex(0xfbcfe8);
-      this.ambientLight.intensity = 0.75;
+      this.ambientLight.color.setHex(0xfce7f3);
+      this.ambientLight.intensity = 0.85;
       this.streetLights.forEach(l => (l.visible = true));
     } else {
-      // NIGHT - rich illuminated sapphire city night with bright street lamps and bounce
-      this.scene.background = new THREE.Color(0x0a1122);
-      this.scene.fog = new THREE.FogExp2(0x0f172a, 0.0024);
+      // NIGHT: Deep sapphire blue, purple and bright cyan city streetlights
+      this.scene.background = new THREE.Color(0x172554);
+      this.scene.fog = new THREE.FogExp2(0x1e1b4b, 0.0018);
       this.sunLight.color.setHex(0x93c5fd);
-      this.sunLight.intensity = 0.75;
+      this.sunLight.intensity = 0.85;
       this.sunLight.position.set(80, 140, -50);
       this.ambientLight.color.setHex(0x38bdf8);
-      this.ambientLight.intensity = 0.65;
+      this.ambientLight.intensity = 0.75;
       this.streetLights.forEach(l => (l.visible = true));
     }
   }
@@ -111,12 +115,12 @@ export class CityWorld {
     const halfGrid = Math.floor(this.cityGridSize / 2);
     const spacing = this.blockSize + this.roadWidth;
 
-    // Ground Base
+    // Ground Base - Lush Greenery under city
     const groundGeo = new THREE.PlaneGeometry(900, 900);
     const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x18202c,
-      roughness: 0.9,
-      metalness: 0.1,
+      color: 0x16a34a,
+      roughness: 0.85,
+      metalness: 0.05,
     });
     const groundMesh = new THREE.Mesh(groundGeo, groundMat);
     groundMesh.rotation.x = -Math.PI / 2;
@@ -130,8 +134,38 @@ export class CityWorld {
         const blockCenterX = gx * spacing;
         const blockCenterZ = gz * spacing;
 
-        // Build City Block (Sidewalk, Buildings, Trees, Props)
-        this.buildCityBlock(blockCenterX, blockCenterZ, gx, gz, quality);
+        // Specialized Landmarks vs Standard Urban Blocks
+        if (gx === 0 && gz === 0) {
+          // Central Tower & Plaza
+          this.buildCentralTowerBlock(blockCenterX, blockCenterZ, quality);
+        } else if (gx === -1 && gz === 0) {
+          // Grand Park
+          this.buildGrandParkBlock(blockCenterX, blockCenterZ, quality);
+        } else if (gx === 1 && gz === 0) {
+          // City Drive Mall
+          this.buildMallBlock(blockCenterX, blockCenterZ, quality);
+        } else if (gx === 0 && gz === 1) {
+          // Metro Gas & Fuel Station
+          this.buildGasStationBlock(blockCenterX, blockCenterZ, quality);
+        } else if (gx === -1 && gz === -1) {
+          // Metropolis General Hospital
+          this.buildHospitalBlock(blockCenterX, blockCenterZ, quality);
+        } else if (gx === 0 && gz === -1) {
+          // Metro Police Precinct
+          this.buildPoliceBlock(blockCenterX, blockCenterZ, quality);
+        } else if (gx === 1 && gz === -1) {
+          // Tuning Garage & Dealership
+          this.buildGarageBlock(blockCenterX, blockCenterZ, quality);
+        } else if (gx === -2 && gz === -2) {
+          // Metropolis International Airport Terminal
+          this.buildAirportBlock(blockCenterX, blockCenterZ, quality);
+        } else if (gx === 1 && gz === -1) {
+          // Riverside Waterfront
+          this.buildWaterfrontBlock(blockCenterX, blockCenterZ, quality);
+        } else {
+          // Procedural Urban Block (High-rises, offices, residential)
+          this.buildCityBlock(blockCenterX, blockCenterZ, gx, gz, quality);
+        }
 
         // Build Intersection Traffic Signal at corners
         const interX = blockCenterX + (this.blockSize / 2 + this.roadWidth / 2);
@@ -152,29 +186,318 @@ export class CityWorld {
     this.spawnCollectibleCoins();
   }
 
-  private buildCityBlock(cx: number, cz: number, gx: number, gz: number, quality: GraphicsQuality) {
-    const sidewalkMat = new THREE.MeshStandardMaterial({
-      color: 0x475569,
-      roughness: 0.85,
-      metalness: 0.1,
+  // 1. Central Tower (Metropolis Pinnacle)
+  private buildCentralTowerBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    // Plaza ground
+    const plazaGeo = new THREE.BoxGeometry(this.blockSize - 4, 0.4, this.blockSize - 4);
+    const plazaMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
+    const plaza = new THREE.Mesh(plazaGeo, plazaMat);
+    plaza.position.set(cx, 0.2, cz);
+    this.scene.add(plaza);
+
+    // Central Megatower (Stepped design, 95m tall)
+    const baseHeight = 35;
+    const baseMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, metalness: 0.8, roughness: 0.2 });
+    const baseMesh = new THREE.Mesh(new THREE.BoxGeometry(38, baseHeight, 38), baseMat);
+    baseMesh.position.set(cx, baseHeight / 2 + 0.3, cz);
+    this.scene.add(baseMesh);
+
+    const midHeight = 35;
+    const midMesh = new THREE.Mesh(new THREE.BoxGeometry(26, midHeight, 26), baseMat);
+    midMesh.position.set(cx, baseHeight + midHeight / 2 + 0.3, cz);
+    this.scene.add(midMesh);
+
+    const topHeight = 25;
+    const topMesh = new THREE.Mesh(new THREE.BoxGeometry(16, topHeight, 16), baseMat);
+    topMesh.position.set(cx, baseHeight + midHeight + topHeight / 2 + 0.3, cz);
+    this.scene.add(topMesh);
+
+    // Spire & glowing red/cyan aircraft warning beacon
+    const spireGeo = new THREE.CylinderGeometry(0.3, 1.2, 22, 8);
+    const spireMat = new THREE.MeshStandardMaterial({ color: 0x94a3b8, metalness: 0.9 });
+    const spire = new THREE.Mesh(spireGeo, spireMat);
+    spire.position.set(cx, baseHeight + midHeight + topHeight + 11 + 0.3, cz);
+    this.scene.add(spire);
+
+    const beaconGeo = new THREE.SphereGeometry(0.8, 8, 8);
+    const beaconMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+    const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+    beacon.position.set(cx, baseHeight + midHeight + topHeight + 22 + 0.3, cz);
+    this.scene.add(beacon);
+
+    // Colliders
+    this.colliders.push({ box: new THREE.Box3().setFromObject(baseMesh), type: 'BUILDING' });
+
+    // Plaza Water Fountain
+    const fountainMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.1 });
+    const fountain = new THREE.Mesh(new THREE.CylinderGeometry(6, 6, 1.2, 16), fountainMat);
+    fountain.position.set(cx, 0.8, cz + 28);
+    this.scene.add(fountain);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(fountain), type: 'BARRIER' });
+
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  // 2. Grand Park Block
+  private buildGrandParkBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    // Grass Field
+    const grassGeo = new THREE.BoxGeometry(this.blockSize - 2, 0.35, this.blockSize - 2);
+    const grassMat = new THREE.MeshStandardMaterial({ color: 0x16a34a, roughness: 0.9 });
+    const grass = new THREE.Mesh(grassGeo, grassMat);
+    grass.position.set(cx, 0.18, cz);
+    this.scene.add(grass);
+
+    // Central Obelisk Monument
+    const obeliskGeo = new THREE.CylinderGeometry(0.8, 2.4, 18, 4);
+    const obeliskMat = new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.3 });
+    const obelisk = new THREE.Mesh(obeliskGeo, obeliskMat);
+    obelisk.position.set(cx, 9.2, cz);
+    obelisk.rotation.y = Math.PI / 4;
+    this.scene.add(obelisk);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(obelisk), type: 'POLE' });
+
+    // Trees throughout park
+    const treePositions = [
+      [-25, -25], [25, -25], [-25, 25], [25, 25],
+      [-32, 0], [32, 0], [0, -32], [0, 32],
+      [-14, -14], [14, 14], [-14, 14], [14, -14]
+    ];
+    treePositions.forEach(([tx, tz]) => {
+      this.addTree(cx + tx, cz + tz);
     });
 
-    // Sidewalk base
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  // 3. City Drive Mall Block
+  private buildMallBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    const mallMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.6, roughness: 0.3 });
+    const glassMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.9, roughness: 0.1 });
+
+    // Main Shopping Complex (L-Shape)
+    const b1 = new THREE.Mesh(new THREE.BoxGeometry(60, 22, 35), mallMat);
+    b1.position.set(cx - 8, 11 + 0.25, cz - 15);
+    this.scene.add(b1);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(b1), type: 'BUILDING' });
+
+    const b2 = new THREE.Mesh(new THREE.BoxGeometry(32, 18, 40), mallMat);
+    b2.position.set(cx + 20, 9 + 0.25, cz + 15);
+    this.scene.add(b2);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(b2), type: 'BUILDING' });
+
+    // Glass Atrium
+    const atrium = new THREE.Mesh(new THREE.CylinderGeometry(12, 12, 16, 16), glassMat);
+    atrium.position.set(cx - 10, 8 + 0.25, cz + 15);
+    this.scene.add(atrium);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(atrium), type: 'BUILDING' });
+
+    // Glowing Mall Sign
+    const signMat = new THREE.MeshBasicMaterial({ color: 0x00b8ff });
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(22, 3, 0.5), signMat);
+    sign.position.set(cx - 8, 20, cz + 3);
+    this.scene.add(sign);
+
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  // 4. Metro Gas & Service Station
+  private buildGasStationBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    // Fuel Canopy
+    const canopyMat = new THREE.MeshStandardMaterial({ color: 0x0284c7, roughness: 0.3 });
+    const canopy = new THREE.Mesh(new THREE.BoxGeometry(45, 1.2, 28), canopyMat);
+    canopy.position.set(cx, 7.5, cz);
+    this.scene.add(canopy);
+
+    // 4 Support Pillars
+    const pillarMat = new THREE.MeshStandardMaterial({ color: 0x64748b });
+    const pCoords = [[-15, -9], [15, -9], [-15, 9], [15, 9]];
+    pCoords.forEach(([px, pz]) => {
+      const p = new THREE.Mesh(new THREE.BoxGeometry(1.2, 7.5, 1.2), pillarMat);
+      p.position.set(cx + px, 3.75, cz + pz);
+      this.scene.add(p);
+      this.colliders.push({ box: new THREE.Box3().setFromObject(p), type: 'POLE' });
+    });
+
+    // Fuel Pumps (4 islands)
+    const pumpMat = new THREE.MeshStandardMaterial({ color: 0xf59e0b });
+    [-8, 8].forEach(px => {
+      [-5, 5].forEach(pz => {
+        const pump = new THREE.Mesh(new THREE.BoxGeometry(1.4, 2.2, 2.8), pumpMat);
+        pump.position.set(cx + px, 1.1, cz + pz);
+        this.scene.add(pump);
+        this.colliders.push({ box: new THREE.Box3().setFromObject(pump), type: 'BARRIER' });
+      });
+    });
+
+    // Convenience Store Building in back
+    const shopMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.4 });
+    const shop = new THREE.Mesh(new THREE.BoxGeometry(55, 9, 20), shopMat);
+    shop.position.set(cx, 4.5, cz - 26);
+    this.scene.add(shop);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(shop), type: 'BUILDING' });
+
+    // Gas Price Totem Sign
+    const sign = new THREE.Mesh(new THREE.BoxGeometry(2.5, 12, 1.5), new THREE.MeshBasicMaterial({ color: 0x10b981 }));
+    sign.position.set(cx + 28, 6, cz + 20);
+    this.scene.add(sign);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(sign), type: 'POLE' });
+
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  // 5. Hospital Block
+  private buildHospitalBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    const hospMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
+    const crossMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
+
+    // Hospital Main Ward
+    const h1 = new THREE.Mesh(new THREE.BoxGeometry(50, 26, 45), hospMat);
+    h1.position.set(cx, 13 + 0.25, cz);
+    this.scene.add(h1);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(h1), type: 'BUILDING' });
+
+    // Red Cross Emblem on facade
+    const crossH = new THREE.Mesh(new THREE.BoxGeometry(7, 2, 0.4), crossMat);
+    crossH.position.set(cx, 20, cz + 22.7);
+    this.scene.add(crossH);
+    const crossV = new THREE.Mesh(new THREE.BoxGeometry(2, 7, 0.4), crossMat);
+    crossV.position.set(cx, 20, cz + 22.7);
+    this.scene.add(crossV);
+
+    // Rooftop Helipad
+    const pad = new THREE.Mesh(new THREE.CylinderGeometry(8, 8, 0.3, 16), new THREE.MeshBasicMaterial({ color: 0xfacc15 }));
+    pad.position.set(cx, 26.4, cz);
+    this.scene.add(pad);
+
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  // 6. Police Precinct Block
+  private buildPoliceBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    const policeMat = new THREE.MeshStandardMaterial({ color: 0x1e3a8a, roughness: 0.4, metalness: 0.3 });
+    const b = new THREE.Mesh(new THREE.BoxGeometry(55, 20, 50), policeMat);
+    b.position.set(cx, 10 + 0.25, cz);
+    this.scene.add(b);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(b), type: 'BUILDING' });
+
+    // Police Beacon Light
+    const bLight = new THREE.Mesh(new THREE.SphereGeometry(1.2, 8, 8), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+    bLight.position.set(cx, 21, cz);
+    this.scene.add(bLight);
+
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  // 7. Garage / Dealership Block
+  private buildGarageBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    const garMat = new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.5, metalness: 0.5 });
+    const b = new THREE.Mesh(new THREE.BoxGeometry(60, 14, 45), garMat);
+    b.position.set(cx, 7 + 0.25, cz);
+    this.scene.add(b);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(b), type: 'BUILDING' });
+
+    // Tuning Neon Banner
+    const neon = new THREE.Mesh(new THREE.BoxGeometry(24, 2.5, 0.4), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+    neon.position.set(cx, 12, cz + 22.8);
+    this.scene.add(neon);
+
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  // 8. Airport Terminal Block
+  private buildAirportBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    // Tarmac & Runway
+    const tarmac = new THREE.Mesh(new THREE.BoxGeometry(this.blockSize - 2, 0.3, this.blockSize - 2), new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.9 }));
+    tarmac.position.set(cx, 0.15, cz);
+    this.scene.add(tarmac);
+
+    // Terminal Building
+    const termMat = new THREE.MeshStandardMaterial({ color: 0x334155, metalness: 0.7, roughness: 0.2 });
+    const terminal = new THREE.Mesh(new THREE.BoxGeometry(65, 12, 28), termMat);
+    terminal.position.set(cx, 6 + 0.25, cz + 20);
+    this.scene.add(terminal);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(terminal), type: 'BUILDING' });
+
+    // Air Traffic Control Tower
+    const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.5, 3.5, 34, 12), termMat);
+    tower.position.set(cx - 25, 17, cz - 20);
+    this.scene.add(tower);
+    this.colliders.push({ box: new THREE.Box3().setFromObject(tower), type: 'BUILDING' });
+
+    const cabin = new THREE.Mesh(new THREE.CylinderGeometry(5.5, 3.5, 6, 12), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+    cabin.position.set(cx - 25, 34, cz - 20);
+    this.scene.add(cabin);
+
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  // 9. Waterfront Block
+  private buildWaterfrontBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    // Canal Water
+    const water = new THREE.Mesh(new THREE.PlaneGeometry(this.blockSize - 4, this.blockSize - 4), new THREE.MeshStandardMaterial({ color: 0x0284c7, metalness: 0.9, roughness: 0.1 }));
+    water.rotation.x = -Math.PI / 2;
+    water.position.set(cx, 0.1, cz);
+    this.scene.add(water);
+
+    this.addStreetLightsAroundBlock(cx, cz, quality);
+  }
+
+  private addSidewalk(cx: number, cz: number) {
+    const sidewalkMat = new THREE.MeshStandardMaterial({
+      color: 0xe2e8f0, // Clean light gray sidewalk
+      roughness: 0.7,
+      metalness: 0.1,
+    });
     const sidewalkGeo = new THREE.BoxGeometry(this.blockSize, 0.25, this.blockSize);
     const sidewalk = new THREE.Mesh(sidewalkGeo, sidewalkMat);
     sidewalk.position.set(cx, 0.125, cz);
     sidewalk.receiveShadow = true;
     this.scene.add(sidewalk);
 
-    // Sidewalk edge collider for off-road detection
     const sidewalkBox = new THREE.Box3().setFromObject(sidewalk);
     this.colliders.push({ box: sidewalkBox, type: 'CURB' });
+  }
 
-    // Procedural Buildings per block (4 buildings per block)
+  private addStreetLightsAroundBlock(cx: number, cz: number, quality: GraphicsQuality) {
+    this.addStreetLight(cx - this.blockSize / 2 + 3, cz, quality);
+    this.addStreetLight(cx + this.blockSize / 2 - 3, cz, quality);
+    this.addStreetLight(cx, cz - this.blockSize / 2 + 3, quality);
+    this.addStreetLight(cx, cz + this.blockSize / 2 - 3, quality);
+  }
+
+  private buildCityBlock(cx: number, cz: number, gx: number, gz: number, quality: GraphicsQuality) {
+    this.addSidewalk(cx, cz);
+
+    // Colorful Modern Buildings: Blue, Purple, Orange, Yellow, White, Gray, Pink, Cyan
     const buildingColors = [
-      0x334155, 0x1e293b, 0x0f172a, 0x27272a, 0x3f3f46, 0x18181b, 0x292524, 0x374151
+      0x1677ff, // Primary Electric Blue
+      0x7c3aed, // Purple
+      0xff8a00, // Blaze Orange
+      0xfacc15, // Yellow
+      0xf8fafc, // Pure White
+      0x475569, // Slate Gray
+      0x00cfff, // Bright Cyan
+      0xec4899, // Hot Pink
     ];
-    const windowColors = [0xfef08a, 0x93c5fd, 0xa7f3d0, 0xfde047];
+    const windowColors = [0xffd43b, 0x00cfff, 0xffffff, 0xec4899];
 
     const subSize = (this.blockSize - 8) / 2;
     const offsets = [
@@ -185,15 +508,14 @@ export class CityWorld {
     ];
 
     offsets.forEach((offset, idx) => {
-      // Deterministic heights based on coordinates
       const seed = Math.abs(Math.sin(gx * 12.9898 + gz * 78.233 + idx * 43.123));
-      const height = 18 + Math.floor(seed * 65); // 18m to 83m skyscraper
-      const bColor = buildingColors[(gx + gz + idx + 100) % buildingColors.length];
+      const height = 18 + Math.floor(seed * 65);
+      const bColor = buildingColors[(Math.abs(gx * 3 + gz * 5 + idx)) % buildingColors.length];
 
       const bMat = new THREE.MeshStandardMaterial({
         color: bColor,
-        roughness: 0.4,
-        metalness: 0.6,
+        roughness: 0.35,
+        metalness: 0.45,
       });
 
       const bGeo = new THREE.BoxGeometry(subSize - 2, height, subSize - 2);
@@ -203,22 +525,18 @@ export class CityWorld {
       bMesh.receiveShadow = true;
       this.scene.add(bMesh);
 
-      // Register collision box for building
       const bBox = new THREE.Box3().setFromObject(bMesh);
-      // expand slightly for solid collision buffer
       this.colliders.push({ box: bBox, type: 'BUILDING' });
 
-      // Window accents for night glow
       if (quality !== 'LOW') {
         const winGeo = new THREE.PlaneGeometry(subSize - 4, height * 0.7);
         const winColor = windowColors[idx % windowColors.length];
         const winMat = new THREE.MeshBasicMaterial({
           color: winColor,
           transparent: true,
-          opacity: 0.28,
+          opacity: 0.45,
         });
 
-        // 4 window facade planes
         const wFront = new THREE.Mesh(winGeo, winMat);
         wFront.position.set(cx + offset.x, height * 0.5 + 0.25, cz + offset.z + (subSize - 2) / 2 + 0.05);
         this.scene.add(wFront);
@@ -230,13 +548,8 @@ export class CityWorld {
       }
     });
 
-    // Street light on block perimeter
-    this.addStreetLight(cx - this.blockSize / 2 + 3, cz, quality);
-    this.addStreetLight(cx + this.blockSize / 2 - 3, cz, quality);
-    this.addStreetLight(cx, cz - this.blockSize / 2 + 3, quality);
-    this.addStreetLight(cx, cz + this.blockSize / 2 - 3, quality);
+    this.addStreetLightsAroundBlock(cx, cz, quality);
 
-    // Decorative Trees along sidewalks
     if (quality !== 'LOW') {
       this.addTree(cx - this.blockSize / 2 + 2, cz - 15);
       this.addTree(cx - this.blockSize / 2 + 2, cz + 15);
@@ -257,14 +570,14 @@ export class CityWorld {
     arm.position.set(x, 7, z);
     this.scene.add(arm);
 
-    const lampGeo = new THREE.SphereGeometry(0.3, 8, 8);
-    const lampMat = new THREE.MeshBasicMaterial({ color: 0xfff7ed });
+    const lampGeo = new THREE.SphereGeometry(0.35, 8, 8);
+    const lampMat = new THREE.MeshBasicMaterial({ color: 0xffd43b });
     const lamp = new THREE.Mesh(lampGeo, lampMat);
     lamp.position.set(x, 6.8, z);
     this.scene.add(lamp);
 
     if (quality === 'HIGH') {
-      const pLight = new THREE.PointLight(0xffedd5, 1.8, 22, 1.5);
+      const pLight = new THREE.PointLight(0xffd43b, 2.2, 24, 1.4);
       pLight.position.set(x, 6.5, z);
       this.scene.add(pLight);
       this.streetLights.push(pLight);
@@ -276,13 +589,13 @@ export class CityWorld {
 
   private addTree(x: number, z: number) {
     const trunkGeo = new THREE.CylinderGeometry(0.2, 0.3, 2.5, 6);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5c3a21, roughness: 0.9 });
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.9 });
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.set(x, 1.25, z);
     this.scene.add(trunk);
 
-    const leavesGeo = new THREE.ConeGeometry(1.5, 3.5, 7);
-    const leavesMat = new THREE.MeshStandardMaterial({ color: 0x15803d, roughness: 0.8 });
+    const leavesGeo = new THREE.ConeGeometry(1.6, 3.8, 7);
+    const leavesMat = new THREE.MeshStandardMaterial({ color: 0x22c55e, roughness: 0.75 });
     const leaves = new THREE.Mesh(leavesGeo, leavesMat);
     leaves.position.set(x, 3.8, z);
     this.scene.add(leaves);
@@ -294,15 +607,14 @@ export class CityWorld {
   private buildRoadNetwork(halfGrid: number, spacing: number) {
     const totalSpan = (halfGrid * 2 + 1) * spacing + 60;
     const roadMat = new THREE.MeshStandardMaterial({
-      color: 0x222a38, // Clean dark blue-gray asphalt
-      roughness: 0.85,
+      color: 0x1e293b, // Visible dark slate asphalt
+      roughness: 0.8,
       metalness: 0.15,
     });
 
-    const lineMat = new THREE.MeshBasicMaterial({ color: 0xfacc15 });
-    const whiteLineMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+    const yellowLineMat = new THREE.MeshBasicMaterial({ color: 0xffd43b });
+    const whiteLineMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-    // Road asphalt planes
     for (let i = -halfGrid; i <= halfGrid + 1; i++) {
       const roadCoord = i * spacing - spacing / 2 + this.roadWidth / 2;
 
@@ -322,15 +634,15 @@ export class CityWorld {
       roadZ.receiveShadow = true;
       this.scene.add(roadZ);
 
-      // Center yellow dividing lines
-      const yellowLineXGeo = new THREE.PlaneGeometry(totalSpan, 0.22);
-      const yLineX = new THREE.Mesh(yellowLineXGeo, lineMat);
+      // Center yellow double lines
+      const yellowLineXGeo = new THREE.PlaneGeometry(totalSpan, 0.25);
+      const yLineX = new THREE.Mesh(yellowLineXGeo, yellowLineMat);
       yLineX.rotation.x = -Math.PI / 2;
       yLineX.position.set(0, 0.04, roadCoord);
       this.scene.add(yLineX);
 
-      const yellowLineZGeo = new THREE.PlaneGeometry(0.22, totalSpan);
-      const yLineZ = new THREE.Mesh(yellowLineZGeo, lineMat);
+      const yellowLineZGeo = new THREE.PlaneGeometry(0.25, totalSpan);
+      const yLineZ = new THREE.Mesh(yellowLineZGeo, yellowLineMat);
       yLineZ.rotation.x = -Math.PI / 2;
       yLineZ.position.set(roadCoord, 0.04, 0);
       this.scene.add(yLineZ);
@@ -338,13 +650,13 @@ export class CityWorld {
       // White lane dividers
       const whiteLaneOffsets = [-4.5, 4.5];
       whiteLaneOffsets.forEach(off => {
-        const wLineXGeo = new THREE.PlaneGeometry(totalSpan, 0.15);
+        const wLineXGeo = new THREE.PlaneGeometry(totalSpan, 0.18);
         const wLineX = new THREE.Mesh(wLineXGeo, whiteLineMat);
         wLineX.rotation.x = -Math.PI / 2;
         wLineX.position.set(0, 0.035, roadCoord + off);
         this.scene.add(wLineX);
 
-        const wLineZGeo = new THREE.PlaneGeometry(0.15, totalSpan);
+        const wLineZGeo = new THREE.PlaneGeometry(0.18, totalSpan);
         const wLineZ = new THREE.Mesh(wLineZGeo, whiteLineMat);
         wLineZ.rotation.x = -Math.PI / 2;
         wLineZ.position.set(roadCoord + off, 0.035, 0);
@@ -357,7 +669,6 @@ export class CityWorld {
     const postGeo = new THREE.CylinderGeometry(0.15, 0.18, 5.5, 8);
     const postMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, metalness: 0.7, roughness: 0.3 });
 
-    // 4 Traffic Signal Posts at intersection corners
     const postOffsets = [
       { x: -this.roadWidth / 2 - 1, z: -this.roadWidth / 2 - 1, dir: 'north-south' as const },
       { x: this.roadWidth / 2 + 1, z: this.roadWidth / 2 + 1, dir: 'north-south' as const },
@@ -373,7 +684,6 @@ export class CityWorld {
       post.position.set(px, 2.75, pz);
       this.scene.add(post);
 
-      // Light Box Housing
       const boxGeo = new THREE.BoxGeometry(0.55, 1.4, 0.4);
       const boxMat = new THREE.MeshStandardMaterial({ color: 0x09090b });
       const box = new THREE.Mesh(boxGeo, boxMat);
@@ -383,7 +693,6 @@ export class CityWorld {
       }
       this.scene.add(box);
 
-      // Red, Yellow, Green bulbs
       const lightGeo = new THREE.SphereGeometry(0.12, 10, 10);
       const redMat = new THREE.MeshBasicMaterial({ color: 0x220000 });
       const yellowMat = new THREE.MeshBasicMaterial({ color: 0x222200 });
@@ -419,13 +728,8 @@ export class CityWorld {
   }
 
   private buildParkingBays() {
-    // Standard parking bay for Mission 2
     this.createParkingSlot('slot_1', new THREE.Vector3(25, 0.05, 54), 0, 3.2, 6.0);
-
-    // Advanced reverse parking bay for Mission 10
     this.createParkingSlot('slot_reverse_pro', new THREE.Vector3(-83, 0.05, -54), Math.PI / 2, 3.0, 5.8);
-
-    // Secondary practice slots
     this.createParkingSlot('slot_practice_1', new THREE.Vector3(-25, 0.05, 54), 0, 3.2, 6.0);
     this.createParkingSlot('slot_practice_2', new THREE.Vector3(133, 0.05, -54), Math.PI / 2, 3.2, 6.0);
   }
@@ -435,7 +739,6 @@ export class CityWorld {
     group.position.copy(pos);
     group.rotation.y = rot;
 
-    // Painted boundary lines (White / Yellow)
     const lineMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
     const leftLine = new THREE.Mesh(new THREE.PlaneGeometry(0.18, length), lineMat);
     leftLine.rotation.x = -Math.PI / 2;
@@ -452,25 +755,17 @@ export class CityWorld {
     backLine.position.set(0, 0.03, -length / 2);
     group.add(backLine);
 
-    // Glowing Animated Guide Pad
     const guideGeo = new THREE.PlaneGeometry(width - 0.2, length - 0.2);
     const guideMat = new THREE.MeshBasicMaterial({
-      color: 0x0284c7,
+      color: 0x38bdf8,
       transparent: true,
-      opacity: 0.35,
+      opacity: 0.25,
       side: THREE.DoubleSide,
     });
-    const guideMesh = new THREE.Mesh(guideGeo, guideMat);
-    guideMesh.rotation.x = -Math.PI / 2;
-    guideMesh.position.set(0, 0.025, 0);
-    group.add(guideMesh);
-
-    // Front parking "P" icon / entrance indicator
-    const arrowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
-    const arrowMesh = new THREE.Mesh(new THREE.ConeGeometry(0.6, 1.2, 3), arrowMat);
-    arrowMesh.rotation.x = Math.PI / 2;
-    arrowMesh.position.set(0, 0.04, length / 2 - 0.8);
-    group.add(arrowMesh);
+    const guide = new THREE.Mesh(guideGeo, guideMat);
+    guide.rotation.x = -Math.PI / 2;
+    guide.position.set(0, 0.025, 0);
+    group.add(guide);
 
     this.scene.add(group);
 
@@ -481,42 +776,145 @@ export class CityWorld {
       width,
       length,
       mesh: group,
-      guideMesh,
+      guideMesh: guide,
     });
   }
 
   private spawnCollectibleCoins() {
-    const coinPositions = [
-      new THREE.Vector3(0, 1.0, 30),
-      new THREE.Vector3(54, 1.0, 0),
-      new THREE.Vector3(-54, 1.0, -54),
-      new THREE.Vector3(108, 1.0, 80),
-      new THREE.Vector3(-108, 1.0, 40),
-      new THREE.Vector3(0, 1.0, -108),
-      new THREE.Vector3(60, 1.0, -120),
-      new THREE.Vector3(-80, 1.0, 100),
-    ];
-
-    const coinGeo = new THREE.CylinderGeometry(0.5, 0.5, 0.12, 16);
+    const coinGeo = new THREE.CylinderGeometry(0.9, 0.9, 0.2, 16);
     const coinMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
+      color: 0xfbbf24,
       metalness: 0.9,
       roughness: 0.2,
-      emissive: 0x78350f,
+      emissive: 0xd97706,
+      emissiveIntensity: 0.4,
     });
 
-    coinPositions.forEach((pos, idx) => {
+    const coinSpawns = [
+      { x: 0, z: 25 }, { x: 0, z: 75 }, { x: 0, z: -25 }, { x: 0, z: -75 },
+      { x: 25, z: 0 }, { x: 75, z: 0 }, { x: -25, z: 0 }, { x: -75, z: 0 },
+      { x: 108, z: 25 }, { x: 108, z: -25 }, { x: -108, z: 25 }, { x: -108, z: -25 },
+      { x: 162, z: 108 }, { x: -162, z: 108 }, { x: 162, z: -108 }, { x: -162, z: -108 },
+      { x: 216, z: 0 }, { x: -216, z: 0 }, { x: 0, z: 216 }, { x: 0, z: -216 }
+    ];
+
+    coinSpawns.forEach((spawn, idx) => {
       const coin = new THREE.Mesh(coinGeo, coinMat);
-      coin.position.copy(pos);
+      coin.position.set(spawn.x, 1.2, spawn.z);
       coin.rotation.x = Math.PI / 2;
       this.scene.add(coin);
-
-      this.coinPickups.push({
-        id: `coin_${idx}`,
-        mesh: coin,
-        collected: false,
-      });
+      this.coinPickups.push({ mesh: coin, id: `coin_${idx}`, collected: false });
     });
+  }
+
+  /**
+   * 3D In-World Navigation Route Ribbon / Ground Markers
+   */
+  public updateNavigationPath(waypoints: { x: number; z: number }[], active: boolean) {
+    // Clear old ribbon elements
+    while (this.navPathGroup.children.length > 0) {
+      const obj = this.navPathGroup.children[0];
+      this.navPathGroup.remove(obj);
+    }
+
+    if (!active || waypoints.length < 2) {
+      return;
+    }
+
+    const pathMat = new THREE.MeshBasicMaterial({
+      color: 0x087cf7,
+      transparent: true,
+      opacity: 0.65,
+      side: THREE.DoubleSide,
+    });
+
+    const chevronMat = new THREE.MeshBasicMaterial({
+      color: 0x00b8ff,
+      transparent: true,
+      opacity: 0.85,
+    });
+
+    for (let i = 0; i < waypoints.length - 1; i++) {
+      const p1 = waypoints[i];
+      const p2 = waypoints[i + 1];
+      const dist = Math.hypot(p2.x - p1.x, p2.z - p1.z);
+      if (dist < 0.5) continue;
+
+      const angle = Math.atan2(p2.x - p1.x, p2.z - p1.z);
+      const midX = (p1.x + p2.x) / 2;
+      const midZ = (p1.z + p2.z) / 2;
+
+      // Road Path Stripe
+      const segGeo = new THREE.PlaneGeometry(1.6, dist);
+      const seg = new THREE.Mesh(segGeo, pathMat);
+      seg.rotation.x = -Math.PI / 2;
+      seg.rotation.z = -angle;
+      seg.position.set(midX, 0.08, midZ);
+      this.navPathGroup.add(seg);
+
+      // Glowing Direction Chevrons along segment
+      const numChevrons = Math.max(1, Math.floor(dist / 14));
+      for (let c = 1; c <= numChevrons; c++) {
+        const t = c / (numChevrons + 1);
+        const cx = p1.x + (p2.x - p1.x) * t;
+        const cz = p1.z + (p2.z - p1.z) * t;
+
+        const chevGeo = new THREE.ConeGeometry(0.8, 1.4, 3);
+        const chev = new THREE.Mesh(chevGeo, chevronMat);
+        chev.rotation.x = -Math.PI / 2;
+        chev.rotation.z = -angle;
+        chev.position.set(cx, 0.1, cz);
+        this.navPathGroup.add(chev);
+      }
+    }
+  }
+
+  public updateDestinationMarker(pos: { x: number; z: number } | null, name: string) {
+    if (this.destinationBeacon) {
+      this.scene.remove(this.destinationBeacon);
+      this.destinationBeacon = null;
+    }
+
+    if (!pos) return;
+
+    const group = new THREE.Group();
+    group.position.set(pos.x, 0, pos.z);
+
+    // Glowing Amber Beacon Beam
+    const cylGeo = new THREE.CylinderGeometry(2.2, 2.2, 28, 16, 1, true);
+    const cylMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      transparent: true,
+      opacity: 0.5,
+      side: THREE.DoubleSide,
+    });
+    const cylinder = new THREE.Mesh(cylGeo, cylMat);
+    cylinder.position.y = 14;
+    group.add(cylinder);
+
+    // Ground Target Ring
+    const ringGeo = new THREE.RingGeometry(2.0, 3.8, 24);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xf59e0b,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0.8,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.12;
+    group.add(ring);
+
+    // Floating Pin
+    const pinGeo = new THREE.ConeGeometry(1.6, 3.2, 8);
+    const pinMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
+    const pin = new THREE.Mesh(pinGeo, pinMat);
+    pin.rotation.x = Math.PI;
+    pin.position.y = 16;
+    group.add(pin);
+
+    this.scene.add(group);
+    this.destinationBeacon = group;
   }
 
   public createWaypointBeacon(position: THREE.Vector3): THREE.Group {
@@ -527,7 +925,6 @@ export class CityWorld {
     const group = new THREE.Group();
     group.position.copy(position);
 
-    // Glowing Light Cylinder
     const cylGeo = new THREE.CylinderGeometry(2.5, 2.5, 14, 16, 1, true);
     const cylMat = new THREE.MeshBasicMaterial({
       color: 0x38bdf8,
@@ -539,7 +936,6 @@ export class CityWorld {
     cylinder.position.y = 7;
     group.add(cylinder);
 
-    // Ground Target Ring
     const ringGeo = new THREE.RingGeometry(1.5, 3.0, 24);
     const ringMat = new THREE.MeshBasicMaterial({
       color: 0x0284c7,
@@ -552,11 +948,10 @@ export class CityWorld {
     ring.position.y = 0.08;
     group.add(ring);
 
-    // Floating Downward Arrow
     const arrowGeo = new THREE.ConeGeometry(1.2, 2.5, 8);
     const arrowMat = new THREE.MeshBasicMaterial({ color: 0x38bdf8 });
     const arrow = new THREE.Mesh(arrowGeo, arrowMat);
-    arrow.rotation.x = Math.PI; // point down
+    arrow.rotation.x = Math.PI;
     arrow.position.y = 9.5;
     group.add(arrow);
 
@@ -572,13 +967,10 @@ export class CityWorld {
     }
   }
 
-  /**
-   * Periodic update loop for animated world elements (traffic lights, rotating waypoint, coins)
-   */
   public update(delta: number) {
-    // 1. Traffic Signals State Machine (Green 8s -> Yellow 2.5s -> Red 8s)
+    // 1. Traffic Signals State Machine
     this.trafficSignalTimer += delta;
-    const cycleTime = 20; // 20s total cycle
+    const cycleTime = 20;
     const currentPhase = this.trafficSignalTimer % cycleTime;
 
     this.trafficSignals.forEach(signal => {
@@ -597,7 +989,6 @@ export class CityWorld {
 
       signal.state = state;
 
-      // Update bulb colors
       (signal.redMesh.material as THREE.MeshBasicMaterial).color.setHex(state === 'RED' ? 0xef4444 : 0x220000);
       (signal.yellowMesh.material as THREE.MeshBasicMaterial).color.setHex(state === 'YELLOW' ? 0xf59e0b : 0x222200);
       (signal.greenMesh.material as THREE.MeshBasicMaterial).color.setHex(state === 'GREEN' ? 0x22c55e : 0x002200);
@@ -612,7 +1003,16 @@ export class CityWorld {
       }
     }
 
-    // 3. Animate Rotating Collectible Coins
+    // 3. Animate Destination Beacon
+    if (this.destinationBeacon) {
+      this.destinationBeacon.rotation.y += delta * 1.8;
+      const pin = this.destinationBeacon.children[2];
+      if (pin) {
+        pin.position.y = 16 + Math.sin(Date.now() * 0.005) * 0.8;
+      }
+    }
+
+    // 4. Animate Collectible Coins
     this.coinPickups.forEach(coin => {
       if (!coin.collected) {
         coin.mesh.rotation.z += delta * 2.5;
@@ -620,7 +1020,7 @@ export class CityWorld {
       }
     });
 
-    // 4. Pulse Parking Guides
+    // 5. Pulse Parking Guides
     this.parkingSlots.forEach(slot => {
       if (slot.guideMesh) {
         const mat = slot.guideMesh.material as THREE.MeshBasicMaterial;

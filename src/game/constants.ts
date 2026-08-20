@@ -14,12 +14,12 @@ export const INITIAL_CARS: CarDefinition[] = [
       braking: 7.5,
       durability: 6.5,
     },
-    color: '#3B82F6', // Vivid Blue
+    color: '#1677FF', // Electric Blue
     paintType: 'gloss',
     hasUnderglow: false,
-    underglowColor: '#60A5FA',
+    underglowColor: '#00CFFF',
     modelStyle: 'compact',
-    description: 'Nimble and highly maneuverable compact hatchback. Ideal for tight urban parking and quick turns.',
+    description: 'Nimble and highly maneuverable compact hatchback with electric blue finish and cyan highlights.',
   },
   {
     id: 'street_racer',
@@ -318,24 +318,106 @@ export const UPGRADE_CONFIG = {
 };
 
 export const COLOR_PALETTES = [
-  { name: 'Racing Red', hex: '#EF4444' },
-  { name: 'Cyber Blue', hex: '#3B82F6' },
-  { name: 'Emerald Forest', hex: '#10B981' },
-  { name: 'Amber Gold', hex: '#F59E0B' },
-  { name: 'Vibrant Purple', hex: '#8B5CF6' },
-  { name: 'Matte Stealth Black', hex: '#18181B' },
-  { name: 'Glacier Pearl White', hex: '#F8FAFC' },
-  { name: 'Neon Lime', hex: '#84CC16' },
-  { name: 'Sunset Orange', hex: '#F97316' },
-  { name: 'Electric Cyan', hex: '#06B6D4' },
+  { name: 'Electric Blue', hex: '#1677FF', emoji: '🔵' },
+  { name: 'Crimson Red', hex: '#EF4444', emoji: '🔴' },
+  { name: 'Emerald Green', hex: '#22C55E', emoji: '🟢' },
+  { name: 'Solar Yellow', hex: '#FFD43B', emoji: '🟡' },
+  { name: 'Royal Purple', hex: '#7C3AED', emoji: '🟣' },
+  { name: 'Blaze Orange', hex: '#FF8A00', emoji: '🟠' },
+  { name: 'Pure White', hex: '#FFFFFF', emoji: '⚪' },
+  { name: 'Stealth Black', hex: '#1E293B', emoji: '⚫' },
+  { name: 'Hot Pink', hex: '#EC4899', emoji: '🩷' },
+  { name: 'Cyber Cyan', hex: '#00CFFF', emoji: '🔷' },
 ];
 
 export const UNDERGLOW_COLORS = [
   { name: 'None', hex: 'none' },
-  { name: 'Neon Blue', hex: '#3B82F6' },
-  { name: 'Cyber Purple', hex: '#A855F7' },
+  { name: 'Electric Blue', hex: '#1677FF' },
+  { name: 'Cyber Cyan', hex: '#00CFFF' },
+  { name: 'Royal Purple', hex: '#7C3AED' },
+  { name: 'Hot Pink', hex: '#EC4899' },
   { name: 'Laser Green', hex: '#22C55E' },
-  { name: 'Solar Amber', hex: '#F59E0B' },
+  { name: 'Solar Yellow', hex: '#FFD43B' },
   { name: 'Inferno Red', hex: '#EF4444' },
-  { name: 'Ice Cyan', hex: '#06B6D4' },
 ];
+
+export interface ThemeConfig {
+  id: string;
+  name: string;
+  primary: string;
+  secondary: string;
+  accent: string;
+  bgGradient: string;
+  cardGradient: string;
+  buttonGradient: string;
+  previewColors: string[];
+}
+
+export const THEME_CONFIGS: Record<string, ThemeConfig> = {
+  OCEAN: {
+    id: 'OCEAN',
+    name: 'Ocean',
+    primary: '#1677FF',
+    secondary: '#00CFFF',
+    accent: '#38BDF8',
+    bgGradient: 'from-[#0b1329] via-[#172554] to-[#0b1329]',
+    cardGradient: 'from-[#1677FF]/80 to-[#00CFFF]/80',
+    buttonGradient: 'from-[#1677FF] to-[#00CFFF]',
+    previewColors: ['#1677FF', '#00CFFF', '#38BDF8'],
+  },
+  SUNSET: {
+    id: 'SUNSET',
+    name: 'Sunset',
+    primary: '#FF8A00',
+    secondary: '#EC4899',
+    accent: '#7C3AED',
+    bgGradient: 'from-[#1c0d24] via-[#2e1065] to-[#1c0d24]',
+    cardGradient: 'from-[#FF8A00]/80 via-[#EC4899]/80 to-[#7C3AED]/80',
+    buttonGradient: 'from-[#FF8A00] to-[#EC4899]',
+    previewColors: ['#FF8A00', '#EC4899', '#7C3AED'],
+  },
+  NEON: {
+    id: 'NEON',
+    name: 'Neon',
+    primary: '#00CFFF',
+    secondary: '#22C55E',
+    accent: '#EC4899',
+    bgGradient: 'from-[#081a24] via-[#064e3b] to-[#081a24]',
+    cardGradient: 'from-[#00CFFF]/80 to-[#22C55E]/80',
+    buttonGradient: 'from-[#00CFFF] to-[#22C55E]',
+    previewColors: ['#00CFFF', '#22C55E', '#EC4899'],
+  },
+  TROPICAL: {
+    id: 'TROPICAL',
+    name: 'Tropical',
+    primary: '#22C55E',
+    secondary: '#FFD43B',
+    accent: '#00CFFF',
+    bgGradient: 'from-[#0a1c14] via-[#14532d] to-[#0a1c14]',
+    cardGradient: 'from-[#22C55E]/80 to-[#FFD43B]/80',
+    buttonGradient: 'from-[#22C55E] to-[#FFD43B]',
+    previewColors: ['#22C55E', '#FFD43B', '#00CFFF'],
+  },
+  PURPLE_NIGHT: {
+    id: 'PURPLE_NIGHT',
+    name: 'Purple Night',
+    primary: '#7C3AED',
+    secondary: '#EC4899',
+    accent: '#38BDF8',
+    bgGradient: 'from-[#150d2a] via-[#3b0764] to-[#150d2a]',
+    cardGradient: 'from-[#7C3AED]/80 to-[#EC4899]/80',
+    buttonGradient: 'from-[#7C3AED] to-[#EC4899]',
+    previewColors: ['#7C3AED', '#EC4899', '#38BDF8'],
+  },
+  CLASSIC: {
+    id: 'CLASSIC',
+    name: 'Classic',
+    primary: '#1677FF',
+    secondary: '#EF4444',
+    accent: '#FFD43B',
+    bgGradient: 'from-[#0f172a] via-[#1e293b] to-[#0f172a]',
+    cardGradient: 'from-[#1677FF]/80 to-[#EF4444]/80',
+    buttonGradient: 'from-[#1677FF] to-[#EF4444]',
+    previewColors: ['#1677FF', '#FFD43B', '#EF4444'],
+  },
+};
